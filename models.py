@@ -10,19 +10,35 @@ from django.http import HttpResponseRedirect
 class OwnerAuthMetaClass(models.base.ModelBase):
     def __new__(cls, name, bases, attrs):
         klas = super(OwnerAuthMetaClass, cls).__new__(cls, name, bases, attrs)
-        klas._ownerauth_manage_permission = 'can_manage_' + klas._meta.module_name
+        klas._ownerauth_manage_permission = 'manage_' + klas._meta.module_name
         klas._meta.permissions.append((klas._ownerauth_manage_permission, u'Can manage %s' % klas._meta.verbose_name))
 
         #Prepend app label so that it's in the format for has_perm()
         klas._ownerauth_manage_permission = klas._meta.app_label + '.' + klas._ownerauth_manage_permission
+        klas._change_perm = klas._meta.app_label + '.' + 'change_' + klas._meta.module_name
 
         return klas
+
+    def has_manage_perm(cls, user):
+        return user.has_perm(cls._ownerauth_manage_permission)
+
+    def has_edit_perm(cls, user):
+        return user.has_perm(cls._change_perm)
+
+    def can_edit(cls, instance, user):
+        return (instance.owner == user and cls.has_edit_perm(user)) or cls.has_manage_perm(user)
 
 
 class OwnerAuthModel(models.Model):
     __metaclass__ = OwnerAuthMetaClass
 
     owner = models.ForeignKey(User, blank=True, null=True)
+
+    def get_owner_name(self):
+        name = '%s %s' % (self.owner.first_name, self.owner.last_name)
+        if name == ' ':
+            name = unicode(self.owner)
+        return name
 
     class Meta:
         abstract = True
